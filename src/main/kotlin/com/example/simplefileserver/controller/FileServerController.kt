@@ -143,6 +143,9 @@ class FileServerController {
 
     /**
      * 文件列表
+     *
+     * 手机浏览器查看时显示字体过小的问题
+     * @source https://blog.csdn.net/liji_digital/article/details/130546598
      */
     private fun sendDirectoryList(directory: File, response: HttpServletResponse) {
         response.contentType = "text/html; charset=UTF-8"
@@ -155,6 +158,7 @@ class FileServerController {
             <html>
                 <head>
                     <title>${directory.name}</title>
+                    <meta name="viewport" content="width=device-width, user-scalable=yes, initial-scale=0.8, maxmum-scale=1.0, minimum-scale=0.3">
                 </head>
                 <body>
                     <h1>${directory.name}</h1>
@@ -170,6 +174,7 @@ class FileServerController {
     }
 
     /**
+     * e.g.:
      * <li><a href="filename">filename</a></li>\n
      * <li><a href="filename">filename</a></li>\n\n
      */
