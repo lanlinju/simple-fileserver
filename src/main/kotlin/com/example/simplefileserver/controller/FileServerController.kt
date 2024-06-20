@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletResponse
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import java.io.File
+import java.net.URLConnection
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 
@@ -16,24 +17,18 @@ class FileServerController {
 
     @RequestMapping("/**")
     fun handleFileRequest(request: HttpServletRequest, response: HttpServletResponse) {
-//
-//        request.characterEncoding = "UTF-8"
-//        response.characterEncoding = "UTF-8"
-
         val path: String = rootPath + request.requestURI.replace("/file", "")
         val file = File(URLDecoder.decode(path, StandardCharsets.UTF_8))
-        println(path)
 
-        when {
-            file.exists() -> {
-                if (file.isDirectory) {
-                    sendDirectoryList(file, response)
-                } else {
-                    serveFile(file, request, response)
-                }
-            }
+        if (!file.exists()) {
+            sendNotFound(response)
+            return
+        }
 
-            else -> sendNotFound(response)
+        if (file.isDirectory) {
+            sendDirectoryList(file, response)
+        } else {
+            serveFile(file, request, response)
         }
     }
 
@@ -47,16 +42,15 @@ class FileServerController {
         response.contentType = mimeType
         response.setContentLengthLong(file.length())
 
+        // 处理文件的类型
         val contentDisposition = if (isInlineDisplay(mimeType)) "inline" else "attachment"
         response.setHeader("Content-Disposition", "$contentDisposition; filename=\"${file.name}\"")
 
-        val rangeRequest = request.getHeader("Range") != null
+        val rangeRequest = request.getHeader("Range") != null // 检查是否是分片请求
 
         if (rangeRequest) {
-            println("------------------serveFileInChunks-----------------")
             serveFileInChunks(file, request, response)
         } else {
-            println("------------------serveFileNormally-----------------")
             serveFileNormally(file, response)
         }
     }
@@ -90,13 +84,11 @@ class FileServerController {
      * Content-Type: text/plain
      */
     private fun serveFileInChunks(file: File, request: HttpServletRequest, response: HttpServletResponse) {
-        val rangeHeader = request.getHeader("Range")
-        val ranges = rangeHeader.removePrefix("bytes=").split("-") // 0-144 to ["0", "144"]; 0- to ["0", ""]
-        val start = ranges[0].toLong()
-        val end = if (ranges[1].isNotEmpty()) ranges[1].toLong() else file.length() - 1
+        val (start, end) = getContentRange(request, file)
+        val contentLength = end - start + 1
 
         response.setStatus(HttpServletResponse.SC_PARTIAL_CONTENT)
-        response.setContentLengthLong(end - start + 1)
+        response.setContentLengthLong(contentLength)
         response.setHeader("Accept-Ranges", "bytes")
         response.setHeader("Content-Range", "bytes $start-$end/${file.length()}")
 
@@ -104,12 +96,12 @@ class FileServerController {
         val input = file.inputStream()
         input.skip(start)
         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-        var bytesToRead = end - start + 1
+        var bytesToRead = contentLength
 
         while (bytesToRead > 0) {
             val bytesRead = input.read(buffer)
             if (bytesRead > bytesToRead) {
-                output.write(buffer, 0, bytesToRead.toInt())// eg. 0-100/144, bytesToRead = 101, bytesRead = 145
+                output.write(buffer, 0, bytesToRead.toInt()) // eg. 0-100/144, bytesToRead = 101, bytesRead = 145
                 break
             }
             output.write(buffer, 0, bytesRead)
@@ -118,19 +110,28 @@ class FileServerController {
         input.close()
     }
 
+    /**
+     * 返回分片范围
+     *
+     * Range: bytes=0-499
+     *
+     * start = 0
+     * end = 499
+     */
+    private fun getContentRange(request: HttpServletRequest, file: File): Pair<Long, Long> {
+        val rangeHeader = request.getHeader("Range") ?: return Pair(0, file.length() - 1)
+        val ranges = rangeHeader.removePrefix("bytes=").split("-") // 0-144 to ["0", "144"]; 0- to ["0", ""]
+        val start = ranges[0].toLong()
+        val end = if (ranges[1].isNotEmpty()) ranges[1].toLong() else file.length() - 1
+        return Pair(start, end)
+    }
+
+    /**
+     * 返回文件的Mime类型
+     */
     private fun getMimeType(file: File): String {
-//        val contentType = URLConnection.guessContentTypeFromName(file.name)
-        val fileName = file.name.lowercase()
-        return when {
-            fileName.endsWith(".jpg") || fileName.endsWith(".jpeg") -> "image/jpeg"
-            fileName.endsWith(".png") -> "image/png"
-            fileName.endsWith(".gif") -> "image/gif"
-            fileName.endsWith(".mp4") -> "video/mp4"
-            fileName.endsWith(".pdf") -> "application/pdf"
-            fileName.endsWith(".html") || fileName.endsWith(".htm") -> "text/html"
-            fileName.endsWith(".txt") -> "text/plain"
-            else -> "application/octet-stream"
-        }
+        val mimeType = URLConnection.guessContentTypeFromName(file.name) ?: "application/octet-stream"
+        return mimeType
     }
 
     /**
@@ -140,32 +141,51 @@ class FileServerController {
         return mimeType.startsWith("image/") || mimeType.startsWith("video/")
     }
 
+    /**
+     * 文件列表
+     */
     private fun sendDirectoryList(directory: File, response: HttpServletResponse) {
         response.contentType = "text/html; charset=UTF-8"
 
         val writer = response.writer
 
-        writer.println("<html>")
-        writer.println("<head>")
-        writer.println("<title>" + directory.name + "</title>")
-        writer.println("</head>")
-        writer.println("<body>")
+        val itemList = getItemList(directory)
 
-        writer.println("<h1>" + directory.name + "</h1>")
+        val htmlText = """
+            <html>
+                <head>
+                    <title>${directory.name}</title>
+                </head>
+                <body>
+                    <h1>${directory.name}</h1>
+                    <ul>
+                        ${itemList}
+                    </ul>
+                </body>
+            </html>
+        """.trimIndent()
 
-        writer.println("<ul>")
+        writer.print(htmlText)
+
+    }
+
+    /**
+     * <li><a href="filename">filename</a></li>\n
+     * <li><a href="filename">filename</a></li>\n\n
+     */
+    private fun getItemList(directory: File): StringBuilder {
+        val itemList = StringBuilder()
         val files = directory.listFiles()
         for (file in files!!) {
+            var filename = file.name
+
             if (file.isDirectory) {
-                writer.println("<li><a href=\"" + file.name + "/" + "\">" + file.name + "/" + "</a></li>")
-            } else {
-                writer.println("<li><a href=\"" + file.name + "\">" + file.name + "</a></li>")
+                filename += "/"
             }
+
+            val item = """<li><a href="$filename">$filename</a></li>"""
+            itemList.append(item).append("\n")
         }
-        writer.println("</ul>")
-
-        writer.println("</body>")
-        writer.println("</html>")
-
+        return itemList
     }
 }

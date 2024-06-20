@@ -3,6 +3,7 @@ package com.example.simplefileserver
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.*
 import org.springframework.boot.test.context.SpringBootTest
+import java.net.URLConnection
 
 @SpringBootTest
 class SimpleFileserverApplicationTests {
@@ -45,5 +46,27 @@ class SimpleFileserverApplicationTests {
         assertEquals(expected, input.start)
         assertEquals(expected2, input.last)
         assertEquals(expected2, input.endInclusive)
+    }
+
+    @Test
+    fun testFileMimeType() {
+        val input = "1.mp4"
+        val expected = "video/mp4"
+        val actual = URLConnection.guessContentTypeFromName(input)
+
+        assertEquals(expected, actual)
+
+        val input2 = "1.png"
+        val expected2 = "image/png"
+        val actual2 = URLConnection.guessContentTypeFromName(input2)
+
+        assertEquals(expected2, actual2)
+
+        val input3 = "1."
+        val expected3 = null
+        val actual3 = URLConnection.guessContentTypeFromName(input3)
+
+        assertEquals(expected3, actual3)
+
     }
 }
