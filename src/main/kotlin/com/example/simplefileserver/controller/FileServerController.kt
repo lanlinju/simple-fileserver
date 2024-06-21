@@ -2,6 +2,8 @@ package com.example.simplefileserver.controller
 
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import java.io.File
@@ -11,12 +13,19 @@ import java.nio.charset.StandardCharsets
 
 @RestController
 @RequestMapping("/file")
-class FileServerController {
+class FileServerController @Autowired constructor(
+    private val appConfig: AppConfig,
+) {
 
-    private val rootPath = "D:/" // 设置文件根目录
+    @Value("\${rootPath}")
+    private lateinit var rootPath: String  // 设置的文件根目录
 
     @RequestMapping("/**")
     fun handleFileRequest(request: HttpServletRequest, response: HttpServletResponse) {
+        if (appConfig.environment == "prod") {
+            rootPath = appConfig.directory // 如果使用jar包启动时，从命令行获取目录
+        }
+
         val path: String = rootPath + request.requestURI.replace("/file", "")
         val file = File(URLDecoder.decode(path, StandardCharsets.UTF_8))
 
@@ -43,7 +52,7 @@ class FileServerController {
         response.setContentLengthLong(file.length())
 
         // 处理文件的类型
-        val contentDisposition = if (isInlineDisplay(mimeType)) "inline" else "attachment"
+        val contentDisposition = if (isInlineDisplay(mimeType) && appConfig.inlineDisplay) "inline" else "attachment"
         response.setHeader("Content-Disposition", "$contentDisposition; filename=\"${file.name}\"")
 
         val rangeRequest = request.getHeader("Range") != null // 检查是否是分片请求
@@ -79,7 +88,8 @@ class FileServerController {
      *
      * --- Response Header ---
      * HTTP/1.1 206 Partial Content
-     * Content-Range: bytes 0-499/1234 // start-end/size, 0-/1234 equals 0-499/1234
+     * Content-Range: bytes 0-499/1234 // start-end/size, 0-/1234 equals 0-1234/1234
+     * Accept-Ranges: bytes
      * Content-Length: 500 // 注意此时content-length为：end - start + 1
      * Content-Type: text/plain
      */
