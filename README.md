@@ -28,7 +28,7 @@ java -jar build/libs/simple-fileserver-0.0.2.jar "/path/to/file/"
 2. 在电脑端打开终端`Terminal`，输入`ipconfig`，然后按回车键`Enter`,找到本机的ipv4地址，
    例如下图中的`192.168.1.47`。
 
-   ![ip address](./img/3.png)
+   <img src="./img/3.png" width="500">
 
 3. 最后在手机浏览器中输入`192.168.1.47:8080/`, 注意以自己的ip地址为主。
 
@@ -52,11 +52,11 @@ java -jar simple-fileserver.jar
 
 1. 电脑浏览器截图
 
-   ![pc](./img/1.png)
+   <img src="./img/1.png" width="300">
 
 2. 手机浏览器截图
 
-   ![android](./img/2.jpg)
+   <img src="./img/2.jpg" width="300">
 
 ### 项目如何打包成jar包
 
@@ -70,4 +70,5 @@ java -jar simple-fileserver.jar
 
 运行成功后，目标文件（build/libs/simple-fileserver-0.0.2.jar）将被生成。
 或者下图中的方式：
-![package](./img/4.png)
+
+   <img src="./img/4.png" width="400">
