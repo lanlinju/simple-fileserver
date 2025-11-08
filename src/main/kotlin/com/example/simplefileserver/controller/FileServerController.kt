@@ -68,19 +68,7 @@ class FileServerController @Autowired constructor(
     private fun serveFileNormally(file: File, response: HttpServletResponse) {
         val output = response.outputStream
         val input = file.inputStream()
-        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-        var bytesRead: Int
-        var remain = file.length()
-
-        while (remain > 0) {
-            val bytesRead = input.read(buffer, 0, minOf(buffer.size, remain.toInt()))
-
-            if (bytesRead == -1) break
-                    
-            output.write(buffer, 0, bytesRead)
-            remain -= bytesRead
-        }
-        input.close()
+        input.use { it.transferTo(output) }
     }
 
     /**
@@ -114,7 +102,7 @@ class FileServerController @Autowired constructor(
         var remain = contentLength
 
         while (remain > 0) {
-            val bytesRead = input.read(buffer, 0, minOf(buffer.size, remain.toInt()))
+            val bytesRead = input.read(buffer, 0, minOf(DEFAULT_BUFFER_SIZE, remain.toInt()))
 
             if (bytesRead == -1) break
                     
