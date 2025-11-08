@@ -12,21 +12,19 @@ import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 
 @RestController
-@RequestMapping("/file")
+@RequestMapping("/")
 class FileServerController @Autowired constructor(
     private val appConfig: AppConfig,
 ) {
 
-    @Value("\${rootPath}")
+    // @Value("\${rootPath}")
     private lateinit var rootPath: String  // 设置的文件根目录
 
     @RequestMapping("/**")
     fun handleFileRequest(request: HttpServletRequest, response: HttpServletResponse) {
-        if (appConfig.environment == "prod") {
-            rootPath = appConfig.directory // 如果使用jar包启动时，从命令行获取目录
-        }
+        rootPath = appConfig.directory // 如果使用jar包启动时，从命令行获取目录
 
-        val path: String = rootPath + request.requestURI.replace("/file", "")
+        val path: String = rootPath + request.requestURI
         val file = File(URLDecoder.decode(path, StandardCharsets.UTF_8))
 
         if (!file.exists()) {
@@ -72,8 +70,15 @@ class FileServerController @Autowired constructor(
         val input = file.inputStream()
         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
         var bytesRead: Int
-        while (input.read(buffer).also { bytesRead = it } != -1) {
+        var remain = file.length()
+
+        while (remain > 0) {
+            val bytesRead = input.read(buffer, 0, minOf(buffer.size, remain.toInt()))
+
+            if (bytesRead == -1) break
+                    
             output.write(buffer, 0, bytesRead)
+            remain -= bytesRead
         }
         input.close()
     }
@@ -106,16 +111,15 @@ class FileServerController @Autowired constructor(
         val input = file.inputStream()
         input.skip(start)
         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-        var bytesToRead = contentLength
+        var remain = contentLength
 
-        while (bytesToRead > 0) {
-            val bytesRead = input.read(buffer)
-            if (bytesRead > bytesToRead) {
-                output.write(buffer, 0, bytesToRead.toInt()) // eg. 0-100/144, bytesToRead = 101, bytesRead = 145
-                break
-            }
+        while (remain > 0) {
+            val bytesRead = input.read(buffer, 0, minOf(buffer.size, remain.toInt()))
+
+            if (bytesRead == -1) break
+                    
             output.write(buffer, 0, bytesRead)
-            bytesToRead -= bytesRead
+            remain -= bytesRead
         }
         input.close()
     }
