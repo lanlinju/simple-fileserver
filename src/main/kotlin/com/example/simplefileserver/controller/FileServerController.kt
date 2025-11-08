@@ -3,12 +3,12 @@ package com.example.simplefileserver.controller
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.beans.factory.annotation.Autowired
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import java.io.File
 import java.net.URLConnection
 import java.net.URLDecoder
+import java.nio.channels.Channels
 import java.nio.charset.StandardCharsets
 
 @RestController
@@ -95,20 +95,19 @@ class FileServerController @Autowired constructor(
         response.setHeader("Accept-Ranges", "bytes")
         response.setHeader("Content-Range", "bytes $start-$end/${file.length()}")
 
-        val output = response.outputStream
-        val input = file.inputStream()
-        input.skip(start)
-        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        val output = Channels.newChannel(response.outputStream)
+        val input = file.inputStream().channel
+
         var remain = contentLength
+        var position = start
 
         while (remain > 0) {
-            val bytesRead = input.read(buffer, 0, minOf(DEFAULT_BUFFER_SIZE, remain.toInt()))
-
-            if (bytesRead == -1) break
-                    
-            output.write(buffer, 0, bytesRead)
-            remain -= bytesRead
+            val transferred = input.transferTo(position, remain, output)
+            if (transferred <= 0) break
+            position += transferred
+            remain -= transferred
         }
+
         input.close()
     }
 
