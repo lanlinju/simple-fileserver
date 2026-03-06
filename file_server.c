@@ -272,6 +272,30 @@ static void url_decode(char *dst, const char *src)
     *dst = '\0';
 }
 
+/* URL 编码 */
+static void url_encode(char *dst, size_t size, const char *src)
+{
+    static const char hex[] = "0123456789ABCDEF";
+    size_t i = 0;
+
+    while (*src && i < size - 1)
+    {
+        if (isalnum((unsigned char)*src) || *src == '-' || *src == '_' ||
+            *src == '.' || *src == '~' || *src == '/')
+        {
+            dst[i++] = *src;
+        }
+        else if (i + 3 < size)
+        {
+            dst[i++] = '%';
+            dst[i++] = hex[((unsigned char)*src) >> 4];
+            dst[i++] = hex[((unsigned char)*src) & 0x0F];
+        }
+        src++;
+    }
+    dst[i] = '\0';
+}
+
 /* 解析 Range 头 */
 static int parse_range_header(const char *range_header, long file_size,
                               long *start, long *end)
@@ -450,6 +474,9 @@ static void send_directory_listing(int fd, const char *dir_path, const char *uri
         return;
     }
 
+    char decoded_uri[MAX_URI];
+    url_decode(decoded_uri, uri);
+
     char body[BUFFER_SIZE * 4];
     int len = snprintf(body, sizeof(body),
                        "<!DOCTYPE html>\n"
@@ -457,7 +484,7 @@ static void send_directory_listing(int fd, const char *dir_path, const char *uri
                        "<style>body{font-family:monospace;} a{text-decoration:none;}"
                        "a:hover{text-decoration:underline;}</style></head>\n"
                        "<body><h1>Index of %s</h1><hr><pre>\n",
-                       uri, uri);
+                       decoded_uri, decoded_uri);
 
     /* 添加上级目录链接 */
     if (strcmp(uri, "/") != 0)
