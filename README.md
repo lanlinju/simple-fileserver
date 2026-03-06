@@ -1,19 +1,46 @@
 # simple-fileserver
 
-一个简单的文件服务器基于SpringBoot实现。
+一个简单的文件服务器，提供多种实现版本：
+
+- **C 语言版本**：轻量高效，适合资源受限环境
+- **Python 版本**：简单易用，快速部署
+- **SpringBoot 版本**：功能完整
+
+功能特性：
 
 - 一般的文件直接触发下载
 - 图片文件会在浏览器展示
-- 视频类型文件会直接播放(支持进度拖放)
+- 视频类型文件会直接播放（支持 Range 请求，可进度拖放）
 
 ### 如何启动
 
 ```sh
 git clone https://github.com/lanlinju/simple-fileserver.git
 cd simple-fileserver
-python fileserver.py "/path/to/file/"
+```
 
-# 或者
+#### C 语言版本（推荐，轻量高效）
+
+```sh
+# 编译
+make build
+
+# 运行
+./file_server /path/to/file/ [port]
+
+# 示例
+./file_server /home/user/videos 8080
+```
+
+#### Python 版本
+
+```sh
+python fileserver.py "/path/to/file/"
+```
+
+#### SpringBoot 版本
+
+```sh
 ./gradlew bootRun --args="/path/to/file/"
 
 # 打包成jar包运行
