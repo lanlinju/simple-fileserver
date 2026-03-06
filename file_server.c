@@ -1,9 +1,11 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
+#include <sys/time.h>
 #include <pthread.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -13,15 +15,20 @@
 #include <dirent.h>
 #include <errno.h>
 #include <signal.h>
+#include <limits.h>
 
 /* 调试日志开关：设置为 1 启用调试日志，0 禁用 */
 #define DEBUG 1
 
 #if DEBUG
-#define LOGD(fmt, ...) printf("[DEBUG] " fmt "\n", ##__VA_ARGS__)
-#define LOGI(fmt, ...) printf("[INFO] " fmt "\n", ##__VA_ARGS__)
-#define LOGW(fmt, ...) printf("[WARN] " fmt "\n", ##__VA_ARGS__)
-#define LOGE(fmt, ...) printf("[ERROR] " fmt "\n", ##__VA_ARGS__)
+#define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+
+#define LOG(level, fmt, ...) printf("[%s] [%s:%d %s] " fmt "\n", level, __FILENAME__, __LINE__, __FUNCTION__, ##__VA_ARGS__)
+
+#define LOGD(fmt, ...) LOG("DEBUG", fmt, ##__VA_ARGS__)
+#define LOGI(fmt, ...) LOG("INFO", fmt, ##__VA_ARGS__)
+#define LOGW(fmt, ...) LOG("WARN", fmt, ##__VA_ARGS__)
+#define LOGE(fmt, ...) LOG("ERROR", fmt, ##__VA_ARGS__)
 #else
 #define LOGD(fmt, ...)
 #define LOGI(fmt, ...)
@@ -32,7 +39,7 @@
 #define PORT 8080
 #define BUFFER_SIZE 65536
 #define MAX_PATH 1024
-#define MAX_URI 512
+#define MAX_URI 1024
 
 static char *file_root = NULL;
 
@@ -701,7 +708,7 @@ void *handle_client(void *arg)
         LOGD("Received %zd bytes on fd=%d", n, client_fd);
 
         char method[16], uri[MAX_URI], version[16];
-        if (sscanf(buffer, "%15s %511s %15s", method, uri, version) != 3)
+        if (sscanf(buffer, "%15s %1024s %15s", method, uri, version) != 3)
         {
             LOGE("Failed to parse request line on fd=%d", client_fd);
             send_error_response(client_fd, 400);
