@@ -46,7 +46,7 @@ static char *file_root = NULL;
 typedef struct
 {
     int client_fd;
-    struct sockaddr_in client_addr;
+    struct sockaddr_in6 client_addr;
 } client_args_t;
 
 /* 获取 HTTP 状态码描述 */
@@ -688,16 +688,17 @@ void *handle_client(void *arg)
 {
     client_args_t *args = (client_args_t *)arg;
     int client_fd = args->client_fd;
-    struct sockaddr_in client_addr = args->client_addr;
+    struct sockaddr_in6 client_addr = args->client_addr;
 
     pthread_detach(pthread_self());
     free(args);
 
     char buffer[BUFFER_SIZE];
 
+    char addr_str[INET6_ADDRSTRLEN];
+    inet_ntop(AF_INET6, &client_addr.sin6_addr, addr_str, sizeof(addr_str));
     printf("Connection from %s:%d (fd=%d)\n",
-           inet_ntoa(client_addr.sin_addr),
-           ntohs(client_addr.sin_port), client_fd);
+           addr_str, ntohs(client_addr.sin6_port), client_fd);
 
     /* 设置接收超时 */
     struct timeval tv;
@@ -852,10 +853,10 @@ int main(int argc, char *argv[])
     }
 
     int server_fd;
-    struct sockaddr_in server_addr, client_addr;
+    struct sockaddr_in6 server_addr, client_addr;
     socklen_t client_len;
 
-    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    server_fd = socket(AF_INET6, SOCK_STREAM, 0);
     if (server_fd < 0)
     {
         perror("socket");
@@ -865,10 +866,19 @@ int main(int argc, char *argv[])
     int opt = 1;
     setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
+    /* 启用双栈模式：允许 IPv4 和 IPv6 连接 */
+    int ipv6only = 0;
+    if (setsockopt(server_fd, IPPROTO_IPV6, IPV6_V6ONLY, &ipv6only, sizeof(ipv6only)) < 0)
+    {
+        perror("setsockopt IPV6_V6ONLY");
+        close(server_fd);
+        exit(1);
+    }
+
     memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(port);
+    server_addr.sin6_family = AF_INET6;
+    server_addr.sin6_addr = in6addr_any;  /* 监听所有 IPv4 和 IPv6 地址 */
+    server_addr.sin6_port = htons(port);
 
     if (bind(server_fd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
     {
