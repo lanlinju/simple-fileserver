@@ -16,6 +16,8 @@
 #include <errno.h>
 #include <signal.h>
 #include <limits.h>
+#include <netdb.h>
+#include <net/if.h>
 
 /* 调试日志开关：设置为 1 启用调试日志，0 禁用 */
 #define DEBUG 1
@@ -897,6 +899,61 @@ int main(int argc, char *argv[])
     printf("File server started\n");
     printf("Root directory: %s\n", file_root);
     printf("Listening on port %d\n", port);
+
+    // 获取主机名和 IP 地址
+    char hostname[256];
+    if (gethostname(hostname, sizeof(hostname)) == 0)
+    {
+        printf("Hostname: %s\n", hostname);
+
+        struct addrinfo hints, *res, *rp;
+        memset(&hints, 0, sizeof(hints));
+        hints.ai_family = AF_UNSPEC;     // 支持 IPv4 和 IPv6
+        hints.ai_socktype = SOCK_STREAM;
+
+        char port_str[16];
+        snprintf(port_str, sizeof(port_str), "%d", port);
+
+        int status = getaddrinfo(hostname, port_str, &hints, &res);
+        if (status == 0)
+        {
+            char ipstr[INET6_ADDRSTRLEN];
+            for (rp = res; rp != NULL; rp = rp->ai_next)
+            {
+                void *addr;
+                const char *ipver;
+                if (rp->ai_family == AF_INET)
+                {
+                    struct sockaddr_in *ipv4 = (struct sockaddr_in *)rp->ai_addr;
+                    addr = &(ipv4->sin_addr);
+                    ipver = "IPv4";
+                }
+                else if (rp->ai_family == AF_INET6)
+                {
+                    struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *)rp->ai_addr;
+                    addr = &(ipv6->sin6_addr);
+                    ipver = "IPv6";
+                }
+                else
+                {
+                    continue;
+                }
+                inet_ntop(rp->ai_family, addr, ipstr, sizeof(ipstr));
+                if (rp->ai_family == AF_INET6)
+                {
+                    // 跳过链路本地地址 fe80::/10
+                    uint8_t *bytes = (uint8_t *)addr;
+                    if (bytes[0] == 0xfe && (bytes[1] & 0xc0) == 0x80)
+                        continue;
+                    printf("  curl http://[%s]:%d/ (%s)\n", ipstr, port, ipver);
+                }
+                else
+                    printf("  curl http://%s:%d/ (%s)\n", ipstr, port, ipver);
+            }
+            freeaddrinfo(res);
+        }
+    }
+
     printf("\nTest with:\n");
     printf("  curl http://localhost:%d/\n", port);
     printf("  curl http://localhost:%d/filename.mp4\n", port);
